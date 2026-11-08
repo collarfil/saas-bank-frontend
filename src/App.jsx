@@ -1,4 +1,3 @@
-// src/App.jsx
 import React from "react";
 import {
   BrowserRouter as Router,
@@ -8,19 +7,21 @@ import {
 } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 
-// Layouts
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+
+import GeneralLayout from "./layouts/GeneralLayout";
 import AdminLayout from "./layouts/AdminLayout";
 import BankLayout from "./layouts/BankLayout";
-import GeneralLayout from "./layouts/GeneralLayout";
 
-// Pages
 import Home from "./pages/Home";
 import Login from "./pages/Auth/Login";
 
-// Admin Pages
+// Admin pages
 import Tenants from "./pages/Admin/Tenants";
 
-// Bank Pages
+// Bank pages
+import TenantDashboard from "./pages/Bank/TenantDashboard";
 import Customers from "./pages/Bank/Customers";
 import CustomerAddresses from "./pages/Bank/CustomerAddresses";
 import CustomerKYC from "./pages/Bank/CustomerKYC";
@@ -29,153 +30,89 @@ import Transactions from "./pages/Bank/Transactions";
 import Loans from "./pages/Bank/Loans";
 import Ledger from "./pages/Bank/Ledger";
 import Payments from "./pages/Bank/Payments";
+import LoanProducts from "./pages/Bank/LoanProducts";
 
-const ProtectedRoute = ({ children, allowedRoles }) => {
-  const token = localStorage.getItem("token");
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+// ✅ Real pages we have built
+import Employees from "./pages/Bank/Employees";
+import Branches from "./pages/Bank/Branches";
+import Departments from "./pages/Bank/Departments";
 
-  if (!token) {
-    return <Navigate to="/login" />;
-  }
+// 🛑 Placeholders for pages we haven't built yet
+const AccountTypes = () => <div>Account Types - Coming Soon</div>;
+//const LoanProducts = () => <div>Loan Products - Coming Soon</div>;
+const LoanRepayments = () => <div>Loan Repayments - Coming Soon</div>;
 
-  const userRoles = user.roles || [];
+const BANK_ROLES = ["TenantAdmin", "BranchManager", "LoanOfficer", "Teller"];
 
-  if (allowedRoles && !allowedRoles.some((role) => userRoles.includes(role))) {
-    return <Navigate to="/" />;
-  }
-
-  return children;
-};
-
-function App() {
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const token = localStorage.getItem("token");
-  const isAuthenticated = !!token;
-  const userRoles = user.roles || [];
-
-  // Determine default redirect based on auth status and role
-  const getDefaultRedirect = () => {
-    if (!isAuthenticated) return "/";
-    if (userRoles.includes("SuperAdmin")) return "/admin";
-    if (
-      userRoles.includes("TenantAdmin") ||
-      userRoles.includes("BranchManager")
-    )
-      return "/bank";
-    return "/dashboard";
-  };
-
+function AppRoutes() {
   return (
-    <Router>
+    <>
       <Toaster position="top-right" />
       <Routes>
-        {/* Public Routes */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/login/:tenant" element={<Login />} />
 
-        {/* Admin Routes */}
-        <Route
-          path="/admin"
-          element={
-            <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-              <AdminLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="/admin/tenants" />} />
-          <Route path="tenants" element={<Tenants />} />
-          <Route
-            path="dashboard"
-            element={
-              <div className="text-center py-20">
-                Admin Dashboard - Overview
-              </div>
-            }
-          />
+        {/* Super Admin */}
+        <Route element={<ProtectedRoute allowedRoles={["SuperAdmin"]} />}>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<div>Admin Dashboard</div>} />
+            <Route path="tenants" element={<Tenants />} />
+          </Route>
         </Route>
 
-        {/* Bank Routes */}
-        <Route
-          path="/bank"
-          element={
-            <ProtectedRoute
-              allowedRoles={[
-                "TenantAdmin",
-                "BranchManager",
-                "LoanOfficer",
-                "Teller",
-              ]}
-            >
-              <BankLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="/bank/customers" />} />
-          <Route path="customers" element={<Customers />} />
-          <Route path="customer-addresses" element={<CustomerAddresses />} />
-          <Route path="customer-kyc" element={<CustomerKYC />} />
-          <Route path="accounts" element={<Accounts />} />
-          <Route path="transactions" element={<Transactions />} />
-          <Route path="loans" element={<Loans />} />
-          <Route path="ledger" element={<Ledger />} />
-          <Route path="payments" element={<Payments />} />
+        {/* Bank Staff */}
+        <Route element={<ProtectedRoute allowedRoles={BANK_ROLES} />}>
+          <Route path="/bank" element={<BankLayout />}>
+            <Route index element={<TenantDashboard />} />
+
+            {/* Customers */}
+            <Route path="customers" element={<Customers />} />
+            <Route path="customer-addresses" element={<CustomerAddresses />} />
+            <Route path="customer-kyc" element={<CustomerKYC />} />
+
+            {/* Accounts */}
+            <Route path="accounts" element={<Accounts />} />
+            <Route path="account-types" element={<AccountTypes />} />
+
+            {/* HR & Admin */}
+            <Route path="employees" element={<Employees />} />
+            <Route path="branches" element={<Branches />} />
+            <Route path="departments" element={<Departments />} />
+
+            {/* Loans */}
+            <Route path="loans" element={<Loans />} />
+            <Route path="loan-products" element={<LoanProducts />} />
+            <Route path="loan-repayments" element={<LoanRepayments />} />
+
+            {/* Operations */}
+            <Route path="transactions" element={<Transactions />} />
+            <Route path="ledger" element={<Ledger />} />
+            <Route path="payments" element={<Payments />} />
+          </Route>
         </Route>
 
-        {/* Customer Routes */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <GeneralLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route
-            index
-            element={
-              <div className="text-center py-20">
-                Customer Dashboard - Coming Soon
-              </div>
-            }
-          />
-          <Route
-            path="my-accounts"
-            element={
-              <div className="text-center py-20">My Accounts - Coming Soon</div>
-            }
-          />
-          <Route
-            path="transactions"
-            element={
-              <div className="text-center py-20">
-                Transactions - Coming Soon
-              </div>
-            }
-          />
-          <Route
-            path="loan-application"
-            element={
-              <div className="text-center py-20">
-                Loan Application - Coming Soon
-              </div>
-            }
-          />
-          <Route
-            path="my-loans"
-            element={
-              <div className="text-center py-20">My Loans - Coming Soon</div>
-            }
-          />
-          <Route
-            path="profile"
-            element={
-              <div className="text-center py-20">Profile - Coming Soon</div>
-            }
-          />
+        {/* Customer */}
+        <Route element={<ProtectedRoute allowedRoles={["Customer"]} />}>
+          <Route path="/dashboard" element={<GeneralLayout />}>
+            <Route index element={<div>Customer Dashboard</div>} />
+          </Route>
         </Route>
+
+        <Route path="/unauthorized" element={<div>Access denied.</div>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Router>
+    </>
   );
 }
 
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </Router>
+  );
+}
 export default App;
