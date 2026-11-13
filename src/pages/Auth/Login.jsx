@@ -1,3 +1,4 @@
+// src/pages/Auth/Login.jsx
 import React, { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import toast from "react-hot-toast";
@@ -35,16 +36,12 @@ const Login = () => {
 
       if (roles.includes("SuperAdmin")) {
         destination = "/admin";
-      } else if (
-        roles.some((role) =>
-          ["TenantAdmin", "BranchManager", "LoanOfficer", "Teller"].includes(
-            role,
-          ),
-        )
-      ) {
-        destination = "/bank";
       } else if (roles.includes("Customer")) {
         destination = "/dashboard";
+      } else if (roles.length > 0) {
+        // Catch-all: Any other role (TenantAdmin, Teller, Staff, Employee, etc.)
+        // belongs to the Bank Portal.
+        destination = "/bank";
       }
 
       if (!destination) {

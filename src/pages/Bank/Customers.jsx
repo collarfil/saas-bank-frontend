@@ -1,27 +1,23 @@
-// src/pages/Bank/Customers.jsx
 import React, { useState, useEffect } from "react";
-import DataTable from "../../components/DataTable";
-import Modal from "../../components/Modal";
-import { customerApi } from "../../api/customerApi";
 import toast from "react-hot-toast";
+import { customerApi } from "../../api/customerApi";
+import api from "../../api/axios";
 
 const Customers = () => {
   const [customers, setCustomers] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+
   const [formData, setFormData] = useState({
     FirstName: "",
     LastName: "",
-    Gender: "",
-    DOB: "",
     Email: "",
     Phone: "",
+    Gender: "Male",
+    DOB: "",
     Password: "",
   });
-
-  const tenantId = localStorage.getItem("tenantId");
 
   useEffect(() => {
     fetchCustomers();
@@ -31,14 +27,10 @@ const Customers = () => {
     setLoading(true);
     try {
       const response = await customerApi.getAll();
-      // Filter by tenant if needed
-      const filteredCustomers = tenantId
-        ? response.data.filter((c) => c.tenantId == tenantId)
-        : response.data;
-      setCustomers(filteredCustomers);
+      const data = Array.isArray(response.data) ? response.data : [];
+      setCustomers(data);
     } catch (error) {
-      toast.error("Failed to fetch customers");
-      console.error(error);
+      toast.error("Failed to load customers.");
     } finally {
       setLoading(false);
     }
@@ -46,54 +38,63 @@ const Customers = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsSubmitting(true);
+    setLoading(true);
     try {
-      const customerData = {
-        Id: editingCustomer?.id || 0,
-        TenantId: parseInt(tenantId),
-        ...formData,
+      await customerApi.upsert({
+        Id: editingId || 0,
+        FirstName: formData.FirstName,
+        LastName: formData.LastName,
+        Email: formData.Email,
+        Phone: formData.Phone,
+        Gender: formData.Gender,
+        DOB: new Date(formData.DOB).toISOString(),
+        Password: formData.Password || null,
         Created_At: new Date().toISOString(),
-      };
-
-      if (editingCustomer) {
-        await customerApi.upsert(customerData);
-        toast.success("Customer updated successfully");
-      } else {
-        await customerApi.upsert(customerData);
-        toast.success("Customer created successfully");
-      }
+      });
+      toast.success(editingId ? "Customer updated" : "Customer created");
       fetchCustomers();
       closeModal();
     } catch (error) {
       toast.error(error.response?.data?.message || "Operation failed");
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
+    }
+  };
+
+  const handleCreateLogin = async (customer) => {
+    const password = window.prompt(
+      `Enter a password for ${customer.firstName}'s login:`,
+    );
+    if (!password) return;
+
+    try {
+      await api.post(`/customer/${customer.id}/create-login`, { password });
+      toast.success("Login account created! Customer can now log in.");
+      fetchCustomers();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to create login");
     }
   };
 
   const handleEdit = (customer) => {
-    setEditingCustomer(customer);
+    setEditingId(customer.id);
     setFormData({
       FirstName: customer.firstName || "",
       LastName: customer.lastName || "",
-      Gender: customer.gender || "",
-      DOB: customer.dob ? customer.dob.split("T")[0] : "",
       Email: customer.email || "",
       Phone: customer.phone || "",
-      Password: customer.Password || "",
+      Gender: customer.gender || "Male",
+      DOB: customer.dob ? customer.dob.split("T")[0] : "",
+      Password: "",
     });
-    setModalOpen(true);
+    setIsModalOpen(true);
   };
 
-  const handleDelete = async (customer) => {
-    if (
-      window.confirm(
-        `Are you sure you want to delete customer "${customer.firstName} ${customer.lastName}"?`,
-      )
-    ) {
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to delete this customer?")) {
       try {
-        await customerApi.delete(customer.id);
-        toast.success("Customer deleted successfully");
+        await customerApi.delete(id);
+        toast.success("Customer deleted");
         fetchCustomers();
       } catch (error) {
         toast.error("Failed to delete customer");
@@ -102,231 +103,417 @@ const Customers = () => {
   };
 
   const closeModal = () => {
-    setModalOpen(false);
-    setEditingCustomer(null);
+    setIsModalOpen(false);
+    setEditingId(null);
     setFormData({
       FirstName: "",
       LastName: "",
-      Gender: "",
-      DOB: "",
       Email: "",
       Phone: "",
+      Gender: "Male",
+      DOB: "",
       Password: "",
     });
   };
 
-  const columns = [
-    { key: "id", label: "ID", sortable: true },
-    { key: "firstName", label: "First Name", sortable: true },
-    { key: "lastName", label: "Last Name", sortable: true },
-    { key: "gender", label: "Gender" },
-    {
-      key: "dob",
-      label: "Date of Birth",
-      format: (value) => (value ? new Date(value).toLocaleDateString() : "N/A"),
-    },
-    { key: "email", label: "Email" },
-    { key: "phone", label: "Phone" },
-    { key: "password", label: "password" },
-    {
-      key: "status",
-      label: "Status",
-      format: (value) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs ${
-            value === "Active"
-              ? "bg-green-100 text-green-800"
-              : value === "Inactive"
-                ? "bg-yellow-100 text-yellow-800"
-                : "bg-red-100 text-red-800"
-          }`}
-        >
-          {value || "Active"}
-        </span>
-      ),
-    },
-  ];
-
   return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Customers</h1>
+    <div style={{ padding: "20px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginBottom: "20px",
+        }}
+      >
+        <h1 style={{ fontSize: "24px", fontWeight: "bold" }}>Customers</h1>
         <button
-          onClick={() => setModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition flex items-center gap-2"
+          onClick={() => setIsModalOpen(true)}
+          style={{
+            background: "#2563eb",
+            color: "white",
+            padding: "8px 16px",
+            borderRadius: "6px",
+            border: "none",
+            cursor: "pointer",
+          }}
         >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M12 4v16m8-8H4"
-            />
-          </svg>
-          Add Customer
+          + Add Customer
         </button>
       </div>
 
-      <DataTable
-        columns={columns}
-        data={customers}
-        loading={loading}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-      />
-
-      <Modal
-        isOpen={modalOpen}
-        onClose={closeModal}
-        title={editingCustomer ? "Edit Customer" : "Add New Customer"}
-        size="lg"
-      >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                First Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.FirstName}
-                onChange={(e) =>
-                  setFormData({ ...formData, FirstName: e.target.value })
-                }
-                placeholder="Enter first name"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Last Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.LastName}
-                onChange={(e) =>
-                  setFormData({ ...formData, LastName: e.target.value })
-                }
-                placeholder="Enter last name"
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Gender
-              </label>
-              <select
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.Gender}
-                onChange={(e) =>
-                  setFormData({ ...formData, Gender: e.target.value })
-                }
+      {loading ? (
+        <p>Loading customers...</p>
+      ) : (
+        <table
+          style={{
+            width: "100%",
+            borderCollapse: "collapse",
+            background: "white",
+            borderRadius: "8px",
+            overflow: "hidden",
+          }}
+        >
+          <thead style={{ background: "#f3f4f6", textAlign: "left" }}>
+            <tr>
+              <th
+                style={{ padding: "12px", borderBottom: "1px solid #e5e7eb" }}
               >
-                <option value="">Select Gender</option>
-                <option value="Male">Male</option>
-                <option value="Female">Female</option>
-                <option value="Other">Other</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Date of Birth
-              </label>
-              <input
-                type="date"
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.DOB}
-                onChange={(e) =>
-                  setFormData({ ...formData, DOB: e.target.value })
-                }
-              />
-            </div>
-          </div>
+                Name
+              </th>
+              <th
+                style={{ padding: "12px", borderBottom: "1px solid #e5e7eb" }}
+              >
+                Email
+              </th>
+              <th
+                style={{ padding: "12px", borderBottom: "1px solid #e5e7eb" }}
+              >
+                Login Status
+              </th>
+              <th
+                style={{ padding: "12px", borderBottom: "1px solid #e5e7eb" }}
+              >
+                Actions
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {customers.length === 0 ? (
+              <tr>
+                <td
+                  colSpan="4"
+                  style={{
+                    padding: "20px",
+                    textAlign: "center",
+                    color: "#6b7280",
+                  }}
+                >
+                  No customers found.
+                </td>
+              </tr>
+            ) : (
+              customers.map((c) => (
+                <tr key={c.id} style={{ borderBottom: "1px solid #e5e7eb" }}>
+                  <td style={{ padding: "12px" }}>
+                    {c.firstName} {c.lastName}
+                  </td>
+                  <td style={{ padding: "12px" }}>{c.email}</td>
+                  <td style={{ padding: "12px" }}>
+                    {c.applicationUserId ? (
+                      <span style={{ color: "#16a34a", fontWeight: "bold" }}>
+                        Active
+                      </span>
+                    ) : (
+                      <span style={{ color: "#dc2626", fontWeight: "bold" }}>
+                        No Login
+                      </span>
+                    )}
+                  </td>
+                  <td style={{ padding: "12px" }}>
+                    {!c.applicationUserId && (
+                      <button
+                        onClick={() => handleCreateLogin(c)}
+                        style={{
+                          background: "#2563eb",
+                          color: "white",
+                          padding: "4px 8px",
+                          borderRadius: "4px",
+                          border: "none",
+                          cursor: "pointer",
+                          marginRight: "10px",
+                        }}
+                      >
+                        Create Login
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleEdit(c)}
+                      style={{
+                        color: "#2563eb",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        marginRight: "10px",
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(c.id)}
+                      style={{
+                        color: "#dc2626",
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      )}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="email"
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.Email}
-                onChange={(e) =>
-                  setFormData({ ...formData, Email: e.target.value })
-                }
-                placeholder="customer@example.com"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Password <span className="text-red-500">*</span>
-              </label>
-
-              <input
-                type="password"
-                required={!editingCustomer}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.Password}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    Password: e.target.value,
-                  })
-                }
-                placeholder="Enter customer password"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="tel"
-                required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                value={formData.Phone}
-                onChange={(e) =>
-                  setFormData({ ...formData, Phone: e.target.value })
-                }
-                placeholder="Enter phone number"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={closeModal}
-              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+      {/* Modal for Creating/Editing Customer */}
+      {isModalOpen && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 50,
+          }}
+        >
+          <div
+            style={{
+              background: "white",
+              padding: "24px",
+              borderRadius: "8px",
+              width: "100%",
+              maxWidth: "500px",
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "20px",
+                fontWeight: "bold",
+                marginBottom: "16px",
+              }}
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+              {editingId ? "Edit Customer" : "Add Customer"}
+            </h2>
+            <form
+              onSubmit={handleSubmit}
+              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
             >
-              {isSubmitting
-                ? "Processing..."
-                : editingCustomer
-                  ? "Update"
-                  : "Create"}
-            </button>
+              <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ flex: 1 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    First Name
+                  </label>
+                  <input
+                    required
+                    value={formData.FirstName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, FirstName: e.target.value })
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #ccc",
+                      borderRadius: "4px",
+                    }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Last Name
+                  </label>
+                  <input
+                    required
+                    value={formData.LastName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, LastName: e.target.value })
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #ccc",
+                      borderRadius: "4px",
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ flex: 1 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Email
+                  </label>
+                  <input
+                    required
+                    type="email"
+                    value={formData.Email}
+                    onChange={(e) =>
+                      setFormData({ ...formData, Email: e.target.value })
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #ccc",
+                      borderRadius: "4px",
+                    }}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Phone
+                  </label>
+                  <input
+                    required
+                    value={formData.Phone}
+                    onChange={(e) =>
+                      setFormData({ ...formData, Phone: e.target.value })
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #ccc",
+                      borderRadius: "4px",
+                    }}
+                  />
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "12px" }}>
+                <div style={{ flex: 1 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Gender
+                  </label>
+                  <select
+                    value={formData.Gender}
+                    onChange={(e) =>
+                      setFormData({ ...formData, Gender: e.target.value })
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #ccc",
+                      borderRadius: "4px",
+                    }}
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      marginBottom: "4px",
+                    }}
+                  >
+                    Date of Birth
+                  </label>
+                  <input
+                    required
+                    type="date"
+                    value={formData.DOB}
+                    onChange={(e) =>
+                      setFormData({ ...formData, DOB: e.target.value })
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "1px solid #ccc",
+                      borderRadius: "4px",
+                    }}
+                  />
+                </div>
+              </div>
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontSize: "14px",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Password {editingId && "(Leave blank)"}
+                </label>
+                <input
+                  required={!editingId}
+                  type="password"
+                  value={formData.Password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, Password: e.target.value })
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "8px",
+                    border: "1px solid #ccc",
+                    borderRadius: "4px",
+                  }}
+                />
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "10px",
+                  marginTop: "10px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  style={{
+                    padding: "8px 16px",
+                    border: "1px solid #ccc",
+                    borderRadius: "4px",
+                    background: "white",
+                    cursor: "pointer",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  style={{
+                    padding: "8px 16px",
+                    background: "#2563eb",
+                    color: "white",
+                    borderRadius: "4px",
+                    border: "none",
+                    cursor: "pointer",
+                  }}
+                >
+                  {loading ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
-      </Modal>
+        </div>
+      )}
     </div>
   );
 };

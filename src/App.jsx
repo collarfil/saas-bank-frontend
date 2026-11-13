@@ -7,8 +7,9 @@ import {
 } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext"; // Fixed duplicate import
 import ProtectedRoute from "./components/ProtectedRoute";
+import SubscriptionGuard from "./components/SubscriptionGuard";
 
 import GeneralLayout from "./layouts/GeneralLayout";
 import AdminLayout from "./layouts/AdminLayout";
@@ -19,9 +20,13 @@ import Login from "./pages/Auth/Login";
 
 // Admin pages
 import Tenants from "./pages/Admin/Tenants";
+import AdminDashboard from "./pages/Admin/Dashboard";
+import Reports from "./pages/Admin/Reports";
+import Settings from "./pages/Admin/Settings";
 
 // Bank pages
 import TenantDashboard from "./pages/Bank/TenantDashboard";
+import EmployeeDashboard from "./pages/Bank/EmployeeDashboard";
 import Customers from "./pages/Bank/Customers";
 import CustomerAddresses from "./pages/Bank/CustomerAddresses";
 import CustomerKYC from "./pages/Bank/CustomerKYC";
@@ -31,71 +36,108 @@ import Loans from "./pages/Bank/Loans";
 import Ledger from "./pages/Bank/Ledger";
 import Payments from "./pages/Bank/Payments";
 import LoanProducts from "./pages/Bank/LoanProducts";
-
-// ✅ Real pages we have built
 import Employees from "./pages/Bank/Employees";
 import Branches from "./pages/Bank/Branches";
 import Departments from "./pages/Bank/Departments";
+import Subscriptions from "./pages/Bank/Subscriptions";
 
-// 🛑 Placeholders for pages we haven't built yet
+// Customer Pages
+import CustomerDashboard from "./pages/Customer/Dashboard";
+import MyAccounts from "./pages/Customer/MyAccounts";
+import MyTransactions from "./pages/Customer/MyTransactions";
+import ApplyLoan from "./pages/Customer/ApplyLoan";
+import MyLoans from "./pages/Customer/MyLoans";
+import Profile from "./pages/Customer/Profile";
+
+// Placeholders
 const AccountTypes = () => <div>Account Types - Coming Soon</div>;
-//const LoanProducts = () => <div>Loan Products - Coming Soon</div>;
 const LoanRepayments = () => <div>Loan Repayments - Coming Soon</div>;
 
-const BANK_ROLES = ["TenantAdmin", "BranchManager", "LoanOfficer", "Teller"];
+// Role Arrays
+const BANK_ADMIN_ROLES = ["TenantAdmin"];
+const BANK_STAFF_ROLES = [
+  "TenantAdmin",
+  "BranchManager",
+  "LoanOfficer",
+  "Teller",
+  "Staff",
+  "Employee",
+  "Jr Staff",
+];
+
+// Helper Component to pick the right Dashboard
+const BankHome = () => {
+  const { hasRole } = useAuth();
+  return hasRole("TenantAdmin") ? <TenantDashboard /> : <EmployeeDashboard />;
+};
 
 function AppRoutes() {
   return (
     <>
       <Toaster position="top-right" />
       <Routes>
+        {/* Public */}
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/login/:tenant" element={<Login />} />
 
         {/* Super Admin */}
-        <Route element={<ProtectedRoute allowedRoles={["SuperAdmin"]} />}>
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<div>Admin Dashboard</div>} />
-            <Route path="tenants" element={<Tenants />} />
-          </Route>
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminDashboard />} />
+          <Route path="tenants" element={<Tenants />} />
+          <Route path="reports" element={<Reports />} />
+          <Route path="settings" element={<Settings />} />
         </Route>
 
-        {/* Bank Staff */}
-        <Route element={<ProtectedRoute allowedRoles={BANK_ROLES} />}>
+        {/* Bank Staff (All Roles) */}
+        <Route element={<ProtectedRoute allowedRoles={BANK_STAFF_ROLES} />}>
           <Route path="/bank" element={<BankLayout />}>
-            <Route index element={<TenantDashboard />} />
+            <Route element={<SubscriptionGuard />}>
+              {/* Dashboard routes to Employee or Tenant Admin automatically */}
+              <Route index element={<BankHome />} />
 
-            {/* Customers */}
-            <Route path="customers" element={<Customers />} />
-            <Route path="customer-addresses" element={<CustomerAddresses />} />
-            <Route path="customer-kyc" element={<CustomerKYC />} />
+              {/* Shared Routes */}
+              <Route path="customers" element={<Customers />} />
+              <Route path="customer-kyc" element={<CustomerKYC />} />
+              <Route path="accounts" element={<Accounts />} />
+              <Route path="transactions" element={<Transactions />} />
+              <Route path="loans" element={<Loans />} />
+              <Route path="ledger" element={<Ledger />} />
+              <Route path="payments" element={<Payments />} />
 
-            {/* Accounts */}
-            <Route path="accounts" element={<Accounts />} />
-            <Route path="account-types" element={<AccountTypes />} />
+              {/* ADMIN ONLY ROUTES */}
+              <Route
+                element={<ProtectedRoute allowedRoles={BANK_ADMIN_ROLES} />}
+              >
+                <Route
+                  path="customer-addresses"
+                  element={<CustomerAddresses />}
+                />
+                <Route path="account-types" element={<AccountTypes />} />
+                <Route path="employees" element={<Employees />} />
+                <Route path="branches" element={<Branches />} />
+                <Route path="departments" element={<Departments />} />
+                <Route path="loan-products" element={<LoanProducts />} />
+                <Route path="loan-repayments" element={<LoanRepayments />} />
+              </Route>
+            </Route>
 
-            {/* HR & Admin */}
-            <Route path="employees" element={<Employees />} />
-            <Route path="branches" element={<Branches />} />
-            <Route path="departments" element={<Departments />} />
-
-            {/* Loans */}
-            <Route path="loans" element={<Loans />} />
-            <Route path="loan-products" element={<LoanProducts />} />
-            <Route path="loan-repayments" element={<LoanRepayments />} />
-
-            {/* Operations */}
-            <Route path="transactions" element={<Transactions />} />
-            <Route path="ledger" element={<Ledger />} />
-            <Route path="payments" element={<Payments />} />
+            {/* Subscriptions (Admin Only, Outside Subscription Guard) */}
+            <Route element={<ProtectedRoute allowedRoles={BANK_ADMIN_ROLES} />}>
+              <Route path="subscriptions" element={<Subscriptions />} />
+            </Route>
           </Route>
         </Route>
 
-        {/* Customer */}
+        {/* Customer Portal */}
         <Route element={<ProtectedRoute allowedRoles={["Customer"]} />}>
           <Route path="/dashboard" element={<GeneralLayout />}>
-            <Route index element={<div>Customer Dashboard</div>} />
+            <Route index element={<CustomerDashboard />} />
+            <Route path="my-accounts" element={<MyAccounts />} />
+            <Route path="transactions" element={<MyTransactions />} />
+            <Route path="loan-application" element={<ApplyLoan />} />
+            <Route path="my-loans" element={<MyLoans />} />
+            <Route path="profile" element={<Profile />} />
           </Route>
         </Route>
 
@@ -115,4 +157,5 @@ function App() {
     </Router>
   );
 }
+
 export default App;

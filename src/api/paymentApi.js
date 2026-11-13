@@ -1,15 +1,14 @@
-import api from './axios';
+import api from "./axios";
 
 export const paymentApi = {
-    // Paystack
-    initializePaystack: (data) => api.post('/payment/paystack/initialize', data),
-    verifyPaystack: (reference) => api.get(`/payment/paystack/verify/${reference}`),
-    
-    // Flutterwave
-    initializeFlutterwave: (data) => api.post('/payment/flutterwave/initialize', data),
-    verifyFlutterwave: (transactionId) => api.get(`/payment/flutterwave/verify/${transactionId}`),
-    
-    // Common
-    getHistory: () => api.get('/payment/history'),
-    processSubscription: (data) => api.post('/payment/process-subscription', data)
+  // Paystack (Matches PaystackPaymentsController)
+  initializePaystack: (data) => api.post("/paystackpayments/initialize", data),
+  confirmPaystack: (reference, success) =>
+    api.post(`/paystackpayments/confirm/${reference}?success=${success}`),
+
+  // Flutterwave (Matches FlutterwavePaymentsController)
+  initializeFlutterwave: (data) =>
+    api.post("/flutterwavepayments/initialize", data),
+  confirmFlutterwave: (reference, success) =>
+    api.post(`/flutterwavepayments/confirm/${reference}?success=${success}`),
 };

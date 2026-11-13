@@ -1,300 +1,213 @@
 // src/pages/Bank/Payments.jsx
-import React, { useState, useEffect } from 'react';
-import DataTable from '../../components/DataTable';
-import Modal from '../../components/Modal';
-import { paymentApi } from '../../api/paymentApi';
-import { subscriptionApi } from '../../api/subscriptionApi';
-import toast from 'react-hot-toast';
+import React, { useState } from "react";
+import toast from "react-hot-toast";
+import { paymentApi } from "../../api/paymentApi";
 
 const Payments = () => {
-    const [payments, setPayments] = useState([]);
-    const [subscriptions, setSubscriptions] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [modalOpen, setModalOpen] = useState(false);
-    const [selectedGateway, setSelectedGateway] = useState(null);
-    const [formData, setFormData] = useState({
-        subscriptionId: '',
-        amount: '',
-        email: '',
-        customerName: '',
-        phoneNumber: ''
-    });
+  const [provider, setProvider] = useState("paystack"); // 'paystack' or 'flutterwave'
+  const [loading, setLoading] = useState(false);
 
-    const tenantId = localStorage.getItem('tenantId');
+  // Initialize State
+  const [initData, setInitData] = useState({
+    SubscriptionId: "",
+    Amount: "",
+  });
+  const [generatedRef, setGeneratedRef] = useState("");
 
-    useEffect(() => {
-        fetchSubscriptions();
-        fetchPayments();
-    }, []);
+  // Confirm State
+  const [confirmData, setConfirmData] = useState({
+    Reference: "",
+    Success: "true",
+  });
 
-    const fetchSubscriptions = async () => {
-        try {
-            const response = await subscriptionApi.getAll();
-            const filteredSubs = response.data.filter(s => s.tenantId == tenantId && s.isActive);
-            setSubscriptions(filteredSubs);
-        } catch (error) {
-            toast.error('Failed to fetch subscriptions');
-        }
-    };
+  const handleInitialize = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const payload = {
+        SubscriptionId: parseInt(initData.SubscriptionId),
+        Amount: parseFloat(initData.Amount),
+      };
 
-    const fetchPayments = async () => {
-        setLoading(true);
-        try {
-            const response = await paymentApi.getHistory();
-            setPayments(response.data);
-        } catch (error) {
-            toast.error('Failed to fetch payment history');
-        } finally {
-            setLoading(false);
-        }
-    };
+      let response;
+      if (provider === "paystack") {
+        response = await paymentApi.initializePaystack(payload);
+      } else {
+        response = await paymentApi.initializeFlutterwave(payload);
+      }
 
-    const handlePaystackPayment = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            const response = await paymentApi.initializePaystack({
-                subscriptionId: parseInt(formData.subscriptionId),
-                amount: parseFloat(formData.amount),
-                email: formData.email,
-                tenantId: parseInt(tenantId),
-                callbackUrl: `${window.location.origin}/payment/callback`
-            });
-            
-            // Redirect to Paystack
-            window.location.href = response.data.authorizationUrl;
-        } catch (error) {
-            toast.error('Failed to initialize Paystack payment');
-            setLoading(false);
-        }
-    };
+      // Backend returns PaymentDto with transactionReference
+      setGeneratedRef(response.data.transactionReference);
+      toast.success(`${provider} payment initialized!`);
 
-    const handleFlutterwavePayment = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            const response = await paymentApi.initializeFlutterwave({
-                subscriptionId: parseInt(formData.subscriptionId),
-                amount: parseFloat(formData.amount),
-                email: formData.email,
-                customerName: formData.customerName,
-                phoneNumber: formData.phoneNumber,
-                tenantId: parseInt(tenantId),
-                redirectUrl: `${window.location.origin}/payment/callback`
-            });
-            
-            // Redirect to Flutterwave
-            window.location.href = response.data.link;
-        } catch (error) {
-            toast.error('Failed to initialize Flutterwave payment');
-            setLoading(false);
-        }
-    };
+      // Pre-fill the confirm box for easy testing
+      setConfirmData({
+        ...confirmData,
+        Reference: response.data.transactionReference,
+      });
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          error.response?.data ||
+          "Failed to initialize payment",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const closeModal = () => {
-        setModalOpen(false);
-        setSelectedGateway(null);
-        setFormData({
-            subscriptionId: '',
-            amount: '',
-            email: '',
-            customerName: '',
-            phoneNumber: ''
-        });
-    };
+  const handleConfirm = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const successBool = confirmData.Success === "true";
 
-    const handleSubscriptionSelect = (subscriptionId) => {
-        const subscription = subscriptions.find(s => s.id === parseInt(subscriptionId));
-        if (subscription) {
-            setFormData({
-                ...formData,
-                subscriptionId: subscriptionId,
-                amount: subscription.amount
-            });
-        }
-    };
+      if (provider === "paystack") {
+        await paymentApi.confirmPaystack(confirmData.Reference, successBool);
+      } else {
+        await paymentApi.confirmFlutterwave(confirmData.Reference, successBool);
+      }
 
-    const columns = [
-        { key: 'id', label: 'ID', sortable: true },
-        { 
-            key: 'subscriptionId', 
-            label: 'Subscription',
-            format: (value) => {
-                const sub = subscriptions.find(s => s.id === value);
-                return sub ? sub.planName : value;
-            }
-        },
-        { 
-            key: 'amount', 
-            label: 'Amount',
-            format: (value) => `₦${value?.toLocaleString()}`
-        },
-        { key: 'transactionReference', label: 'Transaction Reference' },
-        { 
-            key: 'isSuccessful', 
-            label: 'Status',
-            format: (value) => (
-                <span className={`px-2 py-1 rounded-full text-xs ${
-                    value ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                    {value ? 'Successful' : 'Failed'}
-                </span>
-            )
-        },
-        { 
-            key: 'createdAt', 
-            label: 'Date',
-            format: (value) => new Date(value).toLocaleString()
-        }
-    ];
+      toast.success(
+        `Payment confirmed as ${confirmData.Success === "true" ? "Successful" : "Failed"}`,
+      );
+      setConfirmData({ Reference: "", Success: "true" });
+      setGeneratedRef("");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to confirm payment");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Payment Management</h1>
-                <div className="space-x-2">
-                    <button
-                        onClick={() => {
-                            setSelectedGateway('paystack');
-                            setModalOpen(true);
-                        }}
-                        className="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700"
-                    >
-                        Pay with Paystack
-                    </button>
-                    <button
-                        onClick={() => {
-                            setSelectedGateway('flutterwave');
-                            setModalOpen(true);
-                        }}
-                        className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                    >
-                        Pay with Flutterwave
-                    </button>
-                </div>
+  return (
+    <div className="p-6 max-w-5xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">Payment Gateways</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Initialize and confirm transactions using Paystack or Flutterwave.
+        </p>
+      </div>
+
+      {/* Provider Toggle */}
+      <div className="flex space-x-4 mb-6">
+        <button
+          onClick={() => setProvider("paystack")}
+          className={`px-6 py-3 rounded-lg font-medium transition ${provider === "paystack" ? "bg-green-600 text-white shadow-md" : "bg-white text-gray-600 border hover:bg-gray-50"}`}
+        >
+          Paystack
+        </button>
+        <button
+          onClick={() => setProvider("flutterwave")}
+          className={`px-6 py-3 rounded-lg font-medium transition ${provider === "flutterwave" ? "bg-blue-600 text-white shadow-md" : "bg-white text-gray-600 border hover:bg-gray-50"}`}
+        >
+          Flutterwave
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Initialize Payment */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold mb-4 border-b pb-2">
+            1. Initialize Payment
+          </h2>
+          <form onSubmit={handleInitialize} className="space-y-4">
+            <div>
+              <label className="block text-sm mb-1">Subscription ID</label>
+              <input
+                required
+                type="number"
+                value={initData.SubscriptionId}
+                onChange={(e) =>
+                  setInitData({ ...initData, SubscriptionId: e.target.value })
+                }
+                className="w-full border rounded px-3 py-2"
+                placeholder="e.g. 1"
+              />
             </div>
-
-            {/* Payment Statistics */}
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white rounded-lg shadow p-4">
-                    <p className="text-sm text-gray-600">Total Payments</p>
-                    <p className="text-2xl font-bold">{payments.length}</p>
-                </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <p className="text-sm text-gray-600">Successful Payments</p>
-                    <p className="text-2xl font-bold text-green-600">
-                        {payments.filter(p => p.isSuccessful).length}
-                    </p>
-                </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <p className="text-sm text-gray-600">Total Amount Paid</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                        ₦{payments.filter(p => p.isSuccessful).reduce((sum, p) => sum + p.amount, 0).toLocaleString()}
-                    </p>
-                </div>
+            <div>
+              <label className="block text-sm mb-1">Amount (₦)</label>
+              <input
+                required
+                type="number"
+                step="0.01"
+                value={initData.Amount}
+                onChange={(e) =>
+                  setInitData({ ...initData, Amount: e.target.value })
+                }
+                className="w-full border rounded px-3 py-2"
+                placeholder="e.g. 5000"
+              />
             </div>
-
-            <DataTable
-                columns={columns}
-                data={payments}
-                loading={loading}
-            />
-
-            {/* Payment Modal */}
-            <Modal
-                isOpen={modalOpen}
-                onClose={closeModal}
-                title={selectedGateway === 'paystack' ? 'Pay with Paystack' : 'Pay with Flutterwave'}
-                size="lg"
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full text-white py-2 rounded ${provider === "paystack" ? "bg-green-600 hover:bg-green-700" : "bg-blue-600 hover:bg-blue-700"}`}
             >
-                <form onSubmit={selectedGateway === 'paystack' ? handlePaystackPayment : handleFlutterwavePayment} className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Select Subscription</label>
-                        <select
-                            required
-                            className="w-full border rounded-lg px-3 py-2"
-                            value={formData.subscriptionId}
-                            onChange={(e) => handleSubscriptionSelect(e.target.value)}
-                        >
-                            <option value="">Select Subscription Plan</option>
-                            {subscriptions.map(sub => (
-                                <option key={sub.id} value={sub.id}>
-                                    {sub.planName} - ₦{sub.amount?.toLocaleString()} ({new Date(sub.startDate).toLocaleDateString()} - {new Date(sub.endDate).toLocaleDateString()})
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+              {loading ? "Initializing..." : `Initialize ${provider}`}
+            </button>
+          </form>
 
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Amount (₦)</label>
-                        <input
-                            type="number"
-                            required
-                            readOnly
-                            className="w-full border rounded-lg px-3 py-2 bg-gray-50"
-                            value={formData.amount}
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Email Address</label>
-                        <input
-                            type="email"
-                            required
-                            className="w-full border rounded-lg px-3 py-2"
-                            value={formData.email}
-                            onChange={(e) => setFormData({...formData, email: e.target.value})}
-                            placeholder="customer@example.com"
-                        />
-                    </div>
-
-                    {selectedGateway === 'flutterwave' && (
-                        <>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Customer Name</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="w-full border rounded-lg px-3 py-2"
-                                    value={formData.customerName}
-                                    onChange={(e) => setFormData({...formData, customerName: e.target.value})}
-                                    placeholder="John Doe"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium mb-1">Phone Number</label>
-                                <input
-                                    type="tel"
-                                    required
-                                    className="w-full border rounded-lg px-3 py-2"
-                                    value={formData.phoneNumber}
-                                    onChange={(e) => setFormData({...formData, phoneNumber: e.target.value})}
-                                    placeholder="08012345678"
-                                />
-                            </div>
-                        </>
-                    )}
-
-                    <div className="flex justify-end space-x-2 pt-4">
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            {loading ? 'Processing...' : `Pay ₦${parseFloat(formData.amount || 0).toLocaleString()}`}
-                        </button>
-                    </div>
-                </form>
-            </Modal>
+          {generatedRef && (
+            <div className="mt-4 p-3 bg-gray-50 border border-gray-200 rounded text-sm break-all">
+              <span className="font-semibold block mb-1">
+                Generated Reference:
+              </span>
+              <code>{generatedRef}</code>
+            </div>
+          )}
         </div>
-    );
+
+        {/* Confirm Payment */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <h2 className="text-lg font-semibold mb-4 border-b pb-2">
+            2. Confirm Payment
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Simulate the webhook or callback from the provider.
+          </p>
+
+          <form onSubmit={handleConfirm} className="space-y-4">
+            <div>
+              <label className="block text-sm mb-1">
+                Transaction Reference
+              </label>
+              <input
+                required
+                type="text"
+                value={confirmData.Reference}
+                onChange={(e) =>
+                  setConfirmData({ ...confirmData, Reference: e.target.value })
+                }
+                className="w-full border rounded px-3 py-2"
+                placeholder="Paste the generated reference here"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Payment Status</label>
+              <select
+                value={confirmData.Success}
+                onChange={(e) =>
+                  setConfirmData({ ...confirmData, Success: e.target.value })
+                }
+                className="w-full border rounded px-3 py-2"
+              >
+                <option value="true">Successful</option>
+                <option value="false">Failed</option>
+              </select>
+            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-gray-800 text-white py-2 rounded hover:bg-gray-900"
+            >
+              {loading ? "Confirming..." : "Confirm Payment"}
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default Payments;

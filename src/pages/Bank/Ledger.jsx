@@ -1,317 +1,294 @@
-// src/pages/Bank/Ledger.jsx
-import React, { useState, useEffect } from 'react';
-import DataTable from '../../components/DataTable';
-import Modal from '../../components/Modal';
-import { ledgerApi } from '../../api/ledgerApi';
-import { accountApi } from '../../api/accountApi';
-import toast from 'react-hot-toast';
+import React, { useState } from "react";
+import toast from "react-hot-toast";
+import { ledgerApi } from "../../api/ledgerApi";
 
 const Ledger = () => {
-    const [ledgerEntries, setLedgerEntries] = useState([]);
-    const [accounts, setAccounts] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [modalOpen, setModalOpen] = useState(false);
-    const [selectedAccount, setSelectedAccount] = useState(null);
-    const [formData, setFormData] = useState({
-        entries: [
-            { accountId: '', amount: '', entryType: 'Debit' }
-        ]
-    });
+  const [activeTab, setActiveTab] = useState("search"); // 'search', 'submit', 'approve'
 
-    const tenantId = localStorage.getItem('tenantId');
+  // State for Search
+  const [searchAccountId, setSearchAccountId] = useState("");
+  const [entries, setEntries] = useState([]);
+  const [loadingSearch, setLoadingSearch] = useState(false);
 
-    useEffect(() => {
-        fetchAccounts();
-        fetchLedgerEntries();
-    }, []);
+  // State for Submit
+  const [submitData, setSubmitData] = useState({
+    DebitAccountId: "",
+    CreditAccountId: "",
+    Amount: "",
+  });
+  const [loadingSubmit, setLoadingSubmit] = useState(false);
 
-    const fetchAccounts = async () => {
-        try {
-            const response = await accountApi.getAll();
-            const filteredAccounts = response.data.filter(a => a.tenantId == tenantId);
-            setAccounts(filteredAccounts);
-        } catch (error) {
-            toast.error('Failed to fetch accounts');
-        }
-    };
+  // State for Approve/Reject
+  const [transactionId, setTransactionId] = useState("");
+  const [loadingAction, setLoadingAction] = useState(false);
 
-    const fetchLedgerEntries = async () => {
-        setLoading(true);
-        try {
-            const response = await ledgerApi.getAll();
-            const filteredEntries = response.data.filter(l => l.tenantId == tenantId);
-            setLedgerEntries(filteredEntries);
-        } catch (error) {
-            toast.error('Failed to fetch ledger entries');
-        } finally {
-            setLoading(false);
-        }
-    };
+  // --- Handlers ---
+  const handleSearch = async (e) => {
+    e.preventDefault();
+    setLoadingSearch(true);
+    try {
+      const response = await ledgerApi.getByAccount(searchAccountId);
+      setEntries(response.data);
+      if (response.data.length === 0)
+        toast.info("No entries found for this account.");
+    } catch (error) {
+      toast.error("Failed to fetch ledger entries");
+    } finally {
+      setLoadingSearch(false);
+    }
+  };
 
-    const handleSubmitLedger = async (e) => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            await ledgerApi.submit(formData.entries);
-            toast.success('Ledger transaction submitted for approval');
-            fetchLedgerEntries();
-            closeModal();
-        } catch (error) {
-            toast.error('Failed to submit ledger transaction');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleApprove = async (transactionId) => {
-        try {
-            await ledgerApi.approve(transactionId);
-            toast.success('Transaction approved');
-            fetchLedgerEntries();
-        } catch (error) {
-            toast.error('Failed to approve transaction');
-        }
-    };
-
-    const handleReject = async (transactionId) => {
-        try {
-            await ledgerApi.reject(transactionId);
-            toast.success('Transaction rejected');
-            fetchLedgerEntries();
-        } catch (error) {
-            toast.error('Failed to reject transaction');
-        }
-    };
-
-    const addEntryRow = () => {
-        setFormData({
-            entries: [...formData.entries, { accountId: '', amount: '', entryType: 'Debit' }]
-        });
-    };
-
-    const removeEntryRow = (index) => {
-        const newEntries = formData.entries.filter((_, i) => i !== index);
-        setFormData({ entries: newEntries });
-    };
-
-    const updateEntry = (index, field, value) => {
-        const newEntries = [...formData.entries];
-        newEntries[index][field] = value;
-        setFormData({ entries: newEntries });
-    };
-
-    const closeModal = () => {
-        setModalOpen(false);
-        setFormData({
-            entries: [{ accountId: '', amount: '', entryType: 'Debit' }]
-        });
-    };
-
-    const columns = [
-        { key: 'id', label: 'ID', sortable: true },
-        { 
-            key: 'transactionId', 
-            label: 'Transaction ID' 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoadingSubmit(true);
+    try {
+      // Backend expects a List<LedgerEntryDto>
+      const payload = [
+        {
+          AccountId: parseInt(submitData.DebitAccountId),
+          Amount: parseFloat(submitData.Amount),
+          EntryType: 1, // 1 = Debit (based on your enum)
         },
-        { 
-            key: 'accountId', 
-            label: 'Account',
-            format: (value) => {
-                const account = accounts.find(a => a.id === value);
-                return account ? `${account.account_Number}` : value;
-            }
+        {
+          AccountId: parseInt(submitData.CreditAccountId),
+          Amount: parseFloat(submitData.Amount),
+          EntryType: 2, // 2 = Credit (based on your enum)
         },
-        { 
-            key: 'amount', 
-            label: 'Amount',
-            format: (value) => `₦${value?.toLocaleString()}`
-        },
-        { 
-            key: 'entryType', 
-            label: 'Entry Type',
-            format: (value) => (
-                <span className={`px-2 py-1 rounded-full text-xs ${
-                    value === 'Credit' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
-                    {value}
-                </span>
-            )
-        },
-        { 
-            key: 'createdAt', 
-            label: 'Created Date',
-            format: (value) => new Date(value).toLocaleString()
-        }
-    ];
+      ];
 
-    // Calculate totals for debit and credit
-    const totalDebits = ledgerEntries
-        .filter(e => e.entryType === 'Debit')
-        .reduce((sum, e) => sum + (e.amount || 0), 0);
-    
-    const totalCredits = ledgerEntries
-        .filter(e => e.entryType === 'Credit')
-        .reduce((sum, e) => sum + (e.amount || 0), 0);
+      await ledgerApi.submit(payload);
+      toast.success("Journal entry submitted! Awaiting approval.");
+      setSubmitData({ DebitAccountId: "", CreditAccountId: "", Amount: "" });
+    } catch (error) {
+      toast.error(error.response?.data || "Failed to submit entry");
+    } finally {
+      setLoadingSubmit(false);
+    }
+  };
 
-    return (
-        <div>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">General Ledger</h1>
-                <button
-                    onClick={() => setModalOpen(true)}
-                    className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
-                >
-                    New Journal Entry
-                </button>
-            </div>
+  const handleAction = async (action) => {
+    if (!transactionId) return toast.error("Please enter a Transaction ID");
+    setLoadingAction(true);
+    try {
+      if (action === "approve") {
+        await ledgerApi.approve(transactionId);
+        toast.success("Transaction approved and posted!");
+      } else {
+        await ledgerApi.reject(transactionId);
+        toast.success("Transaction rejected.");
+      }
+      setTransactionId("");
+    } catch (error) {
+      toast.error(error.response?.data || `Failed to ${action} transaction`);
+    } finally {
+      setLoadingAction(false);
+    }
+  };
 
-            {/* Ledger Summary */}
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white rounded-lg shadow p-4">
-                    <p className="text-sm text-gray-600">Total Debits</p>
-                    <p className="text-2xl font-bold text-red-600">₦{totalDebits.toLocaleString()}</p>
-                </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <p className="text-sm text-gray-600">Total Credits</p>
-                    <p className="text-2xl font-bold text-green-600">₦{totalCredits.toLocaleString()}</p>
-                </div>
-                <div className="bg-white rounded-lg shadow p-4">
-                    <p className="text-sm text-gray-600">Balance</p>
-                    <p className={`text-2xl font-bold ${totalDebits - totalCredits >= 0 ? 'text-blue-600' : 'text-orange-600'}`}>
-                        ₦{(totalDebits - totalCredits).toLocaleString()}
-                    </p>
-                </div>
-            </div>
+  return (
+    <div className="p-6 max-w-5xl mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold text-gray-800">General Ledger</h1>
+        <p className="text-sm text-gray-500 mt-1">
+          Query account ledgers, submit journal entries, and approve pending
+          transactions.
+        </p>
+      </div>
 
-            {/* Account Selector for Ledger View */}
-            <div className="mb-6">
-                <select
-                    className="border rounded-lg px-4 py-2"
-                    value={selectedAccount || ''}
-                    onChange={(e) => setSelectedAccount(e.target.value || null)}
-                >
-                    <option value="">All Accounts</option>
-                    {accounts.map(account => (
-                        <option key={account.id} value={account.id}>
-                            {account.account_Number} - Balance: ₦{account.balance?.toLocaleString()}
-                        </option>
-                    ))}
-                </select>
-            </div>
+      {/* Tabs */}
+      <div className="flex space-x-4 mb-6 border-b">
+        <button
+          onClick={() => setActiveTab("search")}
+          className={`pb-2 px-4 font-medium ${activeTab === "search" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500"}`}
+        >
+          Search Account
+        </button>
+        <button
+          onClick={() => setActiveTab("submit")}
+          className={`pb-2 px-4 font-medium ${activeTab === "submit" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500"}`}
+        >
+          New Journal Entry
+        </button>
+        <button
+          onClick={() => setActiveTab("approve")}
+          className={`pb-2 px-4 font-medium ${activeTab === "approve" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-500"}`}
+        >
+          Approve / Reject
+        </button>
+      </div>
 
-            {/* Ledger Entries Table */}
-            <DataTable
-                columns={columns}
-                data={selectedAccount ? ledgerEntries.filter(l => l.accountId === parseInt(selectedAccount)) : ledgerEntries}
-                loading={loading}
-                onView={(entry) => {
-                    // Show entry details
-                    alert(`Ledger Entry Details:\nAccount: ${entry.accountId}\nAmount: ₦${entry.amount}\nType: ${entry.entryType}\nDate: ${new Date(entry.createdAt).toLocaleString()}`);
-                }}
+      {/* TAB: SEARCH */}
+      {activeTab === "search" && (
+        <div className="bg-white rounded-lg shadow p-6">
+          <form onSubmit={handleSearch} className="flex gap-4 mb-6">
+            <input
+              required
+              type="number"
+              placeholder="Enter Account ID (e.g., 1)"
+              value={searchAccountId}
+              onChange={(e) => setSearchAccountId(e.target.value)}
+              className="border rounded px-3 py-2 w-64"
             />
-
-            {/* New Journal Entry Modal */}
-            <Modal
-                isOpen={modalOpen}
-                onClose={closeModal}
-                title="New Journal Entry"
-                size="xl"
+            <button
+              type="submit"
+              disabled={loadingSearch}
+              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
             >
-                <form onSubmit={handleSubmitLedger} className="space-y-4">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Account</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Entry Type</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Amount (₦)</th>
-                                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                {formData.entries.map((entry, index) => (
-                                    <tr key={index}>
-                                        <td className="px-4 py-2">
-                                            <select
-                                                required
-                                                className="w-full border rounded-lg px-2 py-1"
-                                                value={entry.accountId}
-                                                onChange={(e) => updateEntry(index, 'accountId', e.target.value)}
-                                            >
-                                                <option value="">Select Account</option>
-                                                {accounts.map(account => (
-                                                    <option key={account.id} value={account.id}>
-                                                        {account.account_Number}
-                                                    </option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                        <td className="px-4 py-2">
-                                            <select
-                                                required
-                                                className="w-full border rounded-lg px-2 py-1"
-                                                value={entry.entryType}
-                                                onChange={(e) => updateEntry(index, 'entryType', e.target.value)}
-                                            >
-                                                <option value="Debit">Debit</option>
-                                                <option value="Credit">Credit</option>
-                                            </select>
-                                        </td>
-                                        <td className="px-4 py-2">
-                                            <input
-                                                type="number"
-                                                required
-                                                min="0.01"
-                                                step="0.01"
-                                                className="w-full border rounded-lg px-2 py-1"
-                                                value={entry.amount}
-                                                onChange={(e) => updateEntry(index, 'amount', e.target.value)}
-                                            />
-                                        </td>
-                                        <td className="px-4 py-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => removeEntryRow(index)}
-                                                className="text-red-600 hover:text-red-800"
-                                                disabled={formData.entries.length === 1}
-                                            >
-                                                Remove
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
+              {loadingSearch ? "Searching..." : "Search"}
+            </button>
+          </form>
 
-                    <button
-                        type="button"
-                        onClick={addEntryRow}
-                        className="text-blue-600 hover:text-blue-800 text-sm"
-                    >
-                        + Add Row
-                    </button>
-
-                    <div className="flex justify-end space-x-2 pt-4">
-                        <button
-                            type="button"
-                            onClick={closeModal}
-                            className="px-4 py-2 border rounded-lg hover:bg-gray-50"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                        >
-                            Submit for Approval
-                        </button>
-                    </div>
-                </form>
-            </Modal>
+          {entries.length > 0 && (
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                    Entry ID
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                    Transaction ID
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                    Type
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                    Amount
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">
+                    Date
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {entries.map((entry) => (
+                  <tr key={entry.id}>
+                    <td className="px-4 py-3 text-sm">{entry.id}</td>
+                    <td className="px-4 py-3 text-sm">{entry.transactionId}</td>
+                    <td className="px-4 py-3 text-sm">
+                      <span
+                        className={`px-2 py-1 rounded text-xs ${entry.entryType === 1 ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}
+                      >
+                        {entry.entryType === 1 ? "Debit" : "Credit"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm font-medium">
+                      ₦{entry.amount?.toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {new Date(entry.createdAt).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-    );
+      )}
+
+      {/* TAB: SUBMIT */}
+      {activeTab === "submit" && (
+        <div className="bg-white rounded-lg shadow p-6 max-w-lg">
+          <h2 className="text-lg font-semibold mb-4">Submit Journal Entry</h2>
+          <p className="text-xs text-gray-500 mb-4">
+            This creates a Pending transaction. It will not affect balances
+            until approved.
+          </p>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm mb-1">Debit Account ID</label>
+              <input
+                required
+                type="number"
+                value={submitData.DebitAccountId}
+                onChange={(e) =>
+                  setSubmitData({
+                    ...submitData,
+                    DebitAccountId: e.target.value,
+                  })
+                }
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Credit Account ID</label>
+              <input
+                required
+                type="number"
+                value={submitData.CreditAccountId}
+                onChange={(e) =>
+                  setSubmitData({
+                    ...submitData,
+                    CreditAccountId: e.target.value,
+                  })
+                }
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm mb-1">Amount (₦)</label>
+              <input
+                required
+                type="number"
+                step="0.01"
+                value={submitData.Amount}
+                onChange={(e) =>
+                  setSubmitData({ ...submitData, Amount: e.target.value })
+                }
+                className="w-full border rounded px-3 py-2"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={loadingSubmit}
+              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 mt-4"
+            >
+              {loadingSubmit ? "Submitting..." : "Submit Entry"}
+            </button>
+          </form>
+        </div>
+      )}
+
+      {/* TAB: APPROVE */}
+      {activeTab === "approve" && (
+        <div className="bg-white rounded-lg shadow p-6 max-w-lg">
+          <h2 className="text-lg font-semibold mb-4">
+            Approve or Reject Transaction
+          </h2>
+          <p className="text-xs text-gray-500 mb-4">
+            Enter the Transaction ID to Approve or Reject.
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm mb-1">Transaction ID</label>
+              <input
+                type="number"
+                value={transactionId}
+                onChange={(e) => setTransactionId(e.target.value)}
+                className="w-full border rounded px-3 py-2"
+                placeholder="e.g. 5"
+              />
+            </div>
+            <div className="flex gap-4">
+              <button
+                onClick={() => handleAction("approve")}
+                disabled={loadingAction}
+                className="flex-1 bg-green-600 text-white py-2 rounded hover:bg-green-700"
+              >
+                {loadingAction ? "Processing..." : "Approve"}
+              </button>
+              <button
+                onClick={() => handleAction("reject")}
+                disabled={loadingAction}
+                className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-700"
+              >
+                {loadingAction ? "Processing..." : "Reject"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default Ledger;
