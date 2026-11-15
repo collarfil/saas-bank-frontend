@@ -8,102 +8,138 @@ const BankLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { hasRole } = useAuth();
 
+  // Full menu — each item declares which roles can SEE it.
+  // Leaving `roles` undefined means "everyone in /bank" (Teller, BranchManager, etc.)
   const allMenuItems = [
-    { path: "/bank", name: "Dashboard", icon: "🏠" },
     {
+      path: "/bank/customers",
       name: "Customers",
       icon: "👥",
-      path: "#",
-      children: [
-        { path: "/bank/customers", name: "All Customers", icon: "👤" },
-        // Addresses is Admin only, we will filter it below
-        {
-          path: "/bank/customer-addresses",
-          name: "Addresses",
-          icon: "📍",
-          adminOnly: true,
-        },
-        { path: "/bank/customer-kyc", name: "KYC Documents", icon: "📋" },
+      roles: [
+        "TenantAdmin",
+        "BranchManager",
+        "Teller",
+        "RelationshipManager",
+        "CreditAnalyst",
+        "LoanOfficer",
       ],
     },
     {
+      path: "/bank/customer-addresses",
+      name: "Customer Addresses",
+      icon: "📍",
+      roles: ["TenantAdmin", "BranchManager", "Teller", "RelationshipManager"],
+    },
+    {
+      path: "/bank/customer-kyc",
+      name: "Customer KYC",
+      icon: "📋",
+      roles: [
+        "TenantAdmin",
+        "BranchManager",
+        "Teller",
+        "ComplianceOfficer",
+        "RelationshipManager",
+      ],
+    },
+    {
+      path: "/bank/accounts",
       name: "Accounts",
       icon: "💳",
-      path: "#",
-      children: [
-        { path: "/bank/accounts", name: "All Accounts", icon: "🏦" },
-        {
-          path: "/bank/account-types",
-          name: "Account Types",
-          icon: "📑",
-          adminOnly: true,
-        },
+      roles: ["TenantAdmin", "BranchManager", "Teller", "RelationshipManager"],
+    },
+    {
+      path: "/bank/transactions",
+      name: "Transactions",
+      icon: "💸",
+      roles: [
+        "TenantAdmin",
+        "BranchManager",
+        "Teller",
+        "LoanOpsOfficer",
+        "SettlementOfficer",
       ],
     },
-    { path: "/bank/employees", name: "Employees", icon: "👔", adminOnly: true },
-    { path: "/bank/branches", name: "Branches", icon: "🏢", adminOnly: true },
     {
-      path: "/bank/departments",
-      name: "Departments",
-      icon: "🏬",
-      adminOnly: true,
-    },
-    {
+      path: "/bank/loans",
       name: "Loans",
       icon: "💰",
-      path: "#",
-      children: [
-        { path: "/bank/loans", name: "All Loans", icon: "📝" },
-        {
-          path: "/bank/loan-products",
-          name: "Loan Products",
-          icon: "📦",
-          adminOnly: true,
-        },
-        {
-          path: "/bank/loan-repayments",
-          name: "Loan Repayments",
-          icon: "💵",
-          adminOnly: true,
-        },
+      roles: [
+        "TenantAdmin",
+        "BranchManager",
+        "LoanOfficer",
+        "CreditAnalyst",
+        "CreditRiskOfficer",
+        "LoanOpsOfficer",
+        "DisbursementOfficer",
       ],
     },
-    { path: "/bank/transactions", name: "Transactions", icon: "💸" },
-    { path: "/bank/ledger", name: "Ledger", icon: "📒" },
-    { path: "/bank/payments", name: "Payments", icon: "💳" },
     {
-      path: "/bank/subscriptions",
-      name: "Subscriptions",
-      icon: "💳",
-      adminOnly: true,
+      path: "/bank/ledger",
+      name: "Ledger",
+      icon: "📒",
+      roles: ["TenantAdmin", "GLAccountant", "CFO", "InternalAuditor"],
+    },
+    {
+      path: "/bank/payments",
+      name: "Payments",
+      icon: "💵",
+      roles: [
+        "TenantAdmin",
+        "BranchManager",
+        "TreasuryOfficer",
+        "SettlementOfficer",
+      ],
+    },
+    {
+      path: "/bank/gl-accounts",
+      name: "GL Accounts",
+      icon: "📊",
+      roles: ["TenantAdmin", "GLAccountant", "CFO", "InternalAuditor"],
+    },
+    {
+      path: "/bank/journal-entries",
+      name: "Journal Entries",
+      icon: "📓",
+      roles: ["TenantAdmin", "GLAccountant", "CFO", "InternalAuditor"],
+    },
+    {
+      path: "/bank/employees",
+      name: "Employees",
+      icon: "👤",
+      roles: ["TenantAdmin", "BranchManager", "SystemAdmin"],
+    },
+    {
+      path: "/bank/wallets",
+      name: "Wallets",
+      icon: "💰",
+      roles: ["TenantAdmin", "BranchManager", "TreasuryOfficer"],
+    },
+    {
+      path: "/bank/notifications",
+      name: "Notifications",
+      icon: "🔔",
+      roles: ["TenantAdmin", "ComplianceOfficer", "FraudAnalyst"],
+    },
+    {
+      path: "/bank/whatsapp",
+      name: "WhatsApp",
+      icon: "💬",
+      roles: ["TenantAdmin", "RelationshipManager"],
     },
   ];
 
-  // 1. Filter out top-level admin only routes
-  // 2. Filter out children that are admin only
-  const menuItems = allMenuItems
-    .map((item) => {
-      if (item.adminOnly && !hasRole("TenantAdmin")) return null;
-
-      if (item.children) {
-        const filteredChildren = item.children.filter((child) => {
-          if (child.adminOnly && !hasRole("TenantAdmin")) return false;
-          return true;
-        });
-        return { ...item, children: filteredChildren };
-      }
-
-      return item;
-    })
-    .filter(Boolean); // Remove any null items
+  // Filter: show an item only if its `roles` list contains at least one role the user has.
+  const menuItems = allMenuItems.filter((item) => {
+    if (!item.roles) return true; // no restriction = everyone
+    return item.roles.some((r) => hasRole(r)); // user has at least one allowed role
+  });
 
   return (
     <div className="flex h-screen bg-gray-100">
       <Sidebar isOpen={sidebarOpen} menuItems={menuItems} role="bank" />
-
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header toggleSidebar={() => setSidebarOpen((previous) => !previous)} />
-
         <main className="flex-1 overflow-y-auto p-6">
           <Outlet />
         </main>

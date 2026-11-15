@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 import { Toaster } from "react-hot-toast";
 
-import { AuthProvider, useAuth } from "./context/AuthContext"; // Fixed duplicate import
+import { AuthProvider, useAuth } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import SubscriptionGuard from "./components/SubscriptionGuard";
 
@@ -49,17 +49,47 @@ import ApplyLoan from "./pages/Customer/ApplyLoan";
 import MyLoans from "./pages/Customer/MyLoans";
 import Profile from "./pages/Customer/Profile";
 
-// Placeholders
+// Placeholders — replace with real pages incrementally
 const AccountTypes = () => <div>Account Types - Coming Soon</div>;
 const LoanRepayments = () => <div>Loan Repayments - Coming Soon</div>;
+const GLAccounts = () => <div>GL Accounts - Coming Soon</div>;
+const JournalEntries = () => <div>Journal Entries - Coming Soon</div>;
+const Wallets = () => <div>Wallets - Coming Soon</div>;
+const Notifications = () => <div>Notifications - Coming Soon</div>;
+const WhatsApp = () => <div>WhatsApp - Coming Soon</div>;
 
 // Role Arrays
 const BANK_ADMIN_ROLES = ["TenantAdmin"];
+
 const BANK_STAFF_ROLES = [
+  // Core
   "TenantAdmin",
   "BranchManager",
   "LoanOfficer",
   "Teller",
+  // Executive
+  "CEO",
+  "CFO",
+  "CRO",
+  "CCO",
+  "CTO",
+  // Front office
+  "RelationshipManager",
+  "CreditAnalyst",
+  "InvestmentAdvisor",
+  // Middle office
+  "CreditRiskOfficer",
+  "TreasuryOfficer",
+  "ComplianceOfficer",
+  "FraudAnalyst",
+  // Back office
+  "GLAccountant",
+  "LoanOpsOfficer",
+  "SettlementOfficer",
+  "SystemAdmin",
+  "InternalAuditor",
+  "DisbursementOfficer",
+  // Legacy / extended (keep for existing users)
   "Staff",
   "Employee",
   "Jr Staff",
@@ -104,6 +134,13 @@ function AppRoutes() {
               <Route path="loans" element={<Loans />} />
               <Route path="ledger" element={<Ledger />} />
               <Route path="payments" element={<Payments />} />
+
+              {/* New routes — placeholder pages, replace incrementally */}
+              <Route path="gl-accounts" element={<GLAccounts />} />
+              <Route path="journal-entries" element={<JournalEntries />} />
+              <Route path="wallets" element={<Wallets />} />
+              <Route path="notifications" element={<Notifications />} />
+              <Route path="whatsapp" element={<WhatsApp />} />
 
               {/* ADMIN ONLY ROUTES */}
               <Route

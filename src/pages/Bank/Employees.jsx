@@ -194,7 +194,7 @@ const Employees = () => {
                       {emp.email}
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
-                      {emp.role}
+                      {emp.role || "—"}
                     </td>
                     <td className="px-6 py-4 text-sm font-medium space-x-3">
                       <button
@@ -327,10 +327,62 @@ const Employees = () => {
                     onChange={handleInputChange}
                     className="w-full border rounded px-3 py-2"
                   >
-                    <option value="Teller">Teller</option>
-                    <option value="LoanOfficer">Loan Officer</option>
-                    <option value="BranchManager">Branch Manager</option>
-                    <option value="TenantAdmin">Tenant Admin</option>
+                    <optgroup label="Core">
+                      <option value="TenantAdmin">Tenant Admin</option>
+                      <option value="BranchManager">Branch Manager</option>
+                      <option value="Teller">Teller</option>
+                      <option value="LoanOfficer">Loan Officer</option>
+                    </optgroup>
+
+                    <optgroup label="Executive / Governance">
+                      <option value="CEO">CEO</option>
+                      <option value="CFO">CFO</option>
+                      <option value="CRO">CRO</option>
+                      <option value="CCO">CCO</option>
+                      <option value="CTO">CTO</option>
+                    </optgroup>
+
+                    <optgroup label="Front Office">
+                      <option value="RelationshipManager">
+                        Relationship Manager
+                      </option>
+                      <option value="CreditAnalyst">Credit Analyst</option>
+                      <option value="InvestmentAdvisor">
+                        Investment Advisor
+                      </option>
+                    </optgroup>
+
+                    <optgroup label="Middle Office">
+                      <option value="CreditRiskOfficer">
+                        Credit Risk Officer
+                      </option>
+                      <option value="TreasuryOfficer">Treasury Officer</option>
+                      <option value="ComplianceOfficer">
+                        Compliance Officer
+                      </option>
+                      <option value="FraudAnalyst">Fraud Analyst</option>
+                    </optgroup>
+
+                    <optgroup label="Back Office">
+                      <option value="GLAccountant">GL Accountant</option>
+                      <option value="LoanOpsOfficer">
+                        Loan Operations Officer
+                      </option>
+                      <option value="SettlementOfficer">
+                        Settlement Officer
+                      </option>
+                      <option value="DisbursementOfficer">
+                        Disbursement Officer
+                      </option>
+                      <option value="SystemAdmin">System Administrator</option>
+                      <option value="InternalAuditor">Internal Auditor</option>
+                    </optgroup>
+
+                    <optgroup label="Legacy">
+                      <option value="Staff">Staff</option>
+                      <option value="Employee">Employee</option>
+                      <option value="Jr Staff">Jr Staff</option>
+                    </optgroup>
                   </select>
                 </div>
               </div>
